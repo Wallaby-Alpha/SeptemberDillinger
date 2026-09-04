@@ -34,9 +34,8 @@ class TelegramAlertManager:
         """Check whether the symbol is allowed to trigger an alert (cooldown check)."""
         return not self.db.is_on_cooldown(symbol, self.cooldown_minutes)
 
-    def format_alert_message(self, result: ScoringResult) -> str:
-        """Format a clean, structured Markdown message for the Stage 1 Accumulation alert."""
-        # Format numbers with appropriate precision
+    def format_alert_message_html(self, result: ScoringResult) -> str:
+        """Format a clean, structured HTML message for the Stage 1 Accumulation alert."""
         if result.price >= 1.0:
             price_fmt = f"${result.price:,.4f}"
             entry_low_fmt = f"${result.suggested_entry_low:,.4f}"
@@ -54,31 +53,68 @@ class TelegramAlertManager:
 
         clean_symbol = result.symbol.replace("/USDT:USDT", "/USDT")
         base_asset = clean_symbol.split("/")[0]
-
-        # Chart link
         mexc_link = f"https://www.mexc.com/exchange/{base_asset}_USDT"
 
         msg = (
-            f"🚨 *STAGE 1 ALERT: QUIET ACCUMULATION*\n"
+            f"🚨 <b>STAGE 1 ALERT: QUIET ACCUMULATION</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🪙 *Asset:* `{clean_symbol}`\n"
-            f"💵 *Price:* `{price_fmt}`\n"
-            f"⭐️ *Accumulation Score:* `{result.final_score:.2f} / 1.00`\n"
-            f"🏷 *Phase:* `{result.stage}`\n"
+            f"🪙 <b>Asset:</b> <code>{html.escape(clean_symbol)}</code>\n"
+            f"💵 <b>Price:</b> <code>{price_fmt}</code>\n"
+            f"⭐️ <b>Accumulation Score:</b> <code>{result.final_score:.2f} / 1.00</code>\n"
+            f"🏷 <b>Phase:</b> <code>{html.escape(result.stage)}</code>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 *Factor Breakdown:*\n"
-            f"• *Relative Strength (6h):* `{result.rs_score:.2f}` (Alt: `{result.alt_return_6h_pct:+.2f}%` vs BTC: `{result.btc_return_6h_pct:+.2f}%` | Diff: `{result.rs_diff_pct:+.2f}%`)\n"
-            f"• *Volume Ramp:* `{result.vol_score:.2f}` (`{result.vol_ratio:.2f}x` vs 15h base)\n"
-            f"• *Trend Alignment:* `{result.trend_score:.2f}` (1h EMA20: `{ema20_fmt}` | EMA50: `{ema50_fmt}`)\n"
-            f"• *Liquidity / Spread:* `{result.liq_score:.2f}` (`{result.spread_bps:.1f} bps` | Vol: `${result.quote_volume_24h:,.0f}`)\n"
+            f"📊 <b>Factor Breakdown:</b>\n"
+            f"• <b>Relative Strength (6h):</b> <code>{result.rs_score:.2f}</code> (Alt: {result.alt_return_6h_pct:+.2f}% vs BTC: {result.btc_return_6h_pct:+.2f}% | Diff: {result.rs_diff_pct:+.2f}%)\n"
+            f"• <b>Volume Ramp:</b> <code>{result.vol_score:.2f}</code> ({result.vol_ratio:.2f}x vs 15h base)\n"
+            f"• <b>Trend Alignment:</b> <code>{result.trend_score:.2f}</code> (1h EMA20: {ema20_fmt} | EMA50: {ema50_fmt})\n"
+            f"• <b>Liquidity / Spread:</b> <code>{result.liq_score:.2f}</code> ({result.spread_bps:.1f} bps | Vol: ${result.quote_volume_24h:,.0f})\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🎯 *Suggested Entry Zone:* `{entry_low_fmt}` – `{entry_high_fmt}`\n"
-            f"🛑 *Conservative Stop:* `{stop_fmt}` (`-{result.risk_to_stop_pct:.2f}%` risk)\n"
-            f"🔗 [Trade on MEXC Spot]({mexc_link})\n"
+            f"🎯 <b>Suggested Entry Zone:</b> <code>{entry_low_fmt} – {entry_high_fmt}</code>\n"
+            f"🛑 <b>Conservative Stop:</b> <code>{stop_fmt}</code> (-{result.risk_to_stop_pct:.2f}% risk)\n"
+            f"🔗 <a href=\"{mexc_link}\">Trade on MEXC Spot</a>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔬 _Research & Signal Tracking Only. Not Financial Advice._"
+            f"🔬 <i>Research & Signal Tracking Only. Not Financial Advice.</i>"
         )
         return msg
+
+    def format_alert_message(self, result: ScoringResult) -> str:
+        """Alias for backward compatibility."""
+        return self.format_alert_message_html(result)
+
+    def send_test_message(self, text: Optional[str] = None) -> bool:
+        """Send an immediate test ping message to verify Telegram setup."""
+        if not self.is_configured():
+            print("[ERROR] Telegram bot_token or chat_id is missing/empty in configuration.")
+            return False
+
+        body = text or (
+            "🔔 <b>MEXC Accumulation Scanner Test</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "✅ Telegram notifications successfully connected!\n"
+            "Bot is active and monitoring MEXC Spot USDT pairs."
+        )
+
+        url = f"https://api.telegram.org/bot{self.config.bot_token}/sendMessage"
+        payload = {
+            "chat_id": self.config.chat_id,
+            "text": body,
+            "parse_mode": "HTML",
+        }
+        if self.config.thread_id is not None:
+            payload["message_thread_id"] = self.config.thread_id
+
+        try:
+            resp = requests.post(url, json=payload, timeout=10)
+            data = resp.json()
+            if data.get("ok"):
+                print("[SUCCESS] Telegram test message sent successfully!")
+                return True
+            else:
+                print(f"[ERROR] Telegram API Error: {data.get('description')} (Error code: {data.get('error_code')})")
+                return False
+        except Exception as e:
+            print(f"[ERROR] HTTP request failed when connecting to Telegram: {e}")
+            return False
 
     def send_alert(self, result: ScoringResult) -> bool:
         """
@@ -89,19 +125,19 @@ class TelegramAlertManager:
             print(f"[COOLDOWN] {result.symbol} is currently cooling down ({self.cooldown_minutes}m). Skipping alert.")
             return False
 
-        message_text = self.format_alert_message(result)
+        message_html = self.format_alert_message_html(result)
 
         if not self.is_configured():
             print("\n[TELEGRAM DRY-RUN / CONSOLE ALERT]")
-            print(message_text)
+            print(message_html)
             print("-" * 50)
             return True
 
         url = f"https://api.telegram.org/bot{self.config.bot_token}/sendMessage"
         payload = {
             "chat_id": self.config.chat_id,
-            "text": message_text,
-            "parse_mode": "Markdown",
+            "text": message_html,
+            "parse_mode": "HTML",
             "disable_web_page_preview": not self.config.send_chart_link,
         }
 
@@ -115,8 +151,16 @@ class TelegramAlertManager:
                 print(f"[TELEGRAM SENT] Alert sent successfully for {result.symbol}")
                 return True
             else:
-                print(f"[ERROR] Telegram API returned error: {data.get('description')}")
-                return False
+                print(f"[WARN] Telegram HTML send failed: {data.get('description')}. Retrying as plain text...")
+                # Fallback to plain text if HTML formatting failed
+                payload["parse_mode"] = None
+                resp_plain = requests.post(url, json=payload, timeout=10)
+                if resp_plain.json().get("ok"):
+                    print(f"[TELEGRAM SENT] Alert sent as plain text for {result.symbol}")
+                    return True
+                else:
+                    print(f"[ERROR] Telegram plain text send also failed: {resp_plain.json().get('description')}")
+                    return False
         except Exception as e:
             print(f"[ERROR] Failed to dispatch Telegram alert for {result.symbol}: {e}")
             return False
