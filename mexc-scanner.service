@@ -1,0 +1,18 @@
+[Unit]
+Description=MEXC Quiet Accumulation Scanner Daemon with Telegram Alerts
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/mexc-accumulation-scanner
+ExecStart=/opt/mexc-accumulation-scanner/.venv/bin/python main.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

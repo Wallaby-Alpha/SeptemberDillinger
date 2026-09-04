@@ -1,0 +1,33 @@
+{
+  "scan_interval_seconds": 300,
+  "cooldown_minutes": 180,
+  "min_alert_score": 0.65,
+  "min_log_score": 0.45,
+  "database_path": "scanner_data.db",
+  "request_delay_seconds": 0.08,
+  "telegram": {
+    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN_HERE",
+    "chat_id": "YOUR_TELEGRAM_CHAT_ID_HERE",
+    "thread_id": null,
+    "enabled": true,
+    "send_chart_link": true
+  },
+  "gates": {
+    "min_24h_quote_volume": 250000,
+    "max_spread_bps": 80,
+    "min_1h_candles": 100,
+    "max_ema20_1h_extension_pct": 0.12,
+    "max_daily_bearish_pct": -0.05
+  },
+  "weights": {
+    "weight_rs": 0.40,
+    "weight_volume": 0.30,
+    "weight_trend": 0.25,
+    "weight_liquidity": 0.05
+  },
+  "excluded_keywords": [
+    "3L", "3S", "4L", "4S", "5L", "5S",
+    "BEAR", "BULL", "DOWN", "UP",
+    "USDC", "FDUSD", "TUSD", "BUSD", "DAI", "USDD", "USDE", "EUR", "TRY"
+  ]
+}

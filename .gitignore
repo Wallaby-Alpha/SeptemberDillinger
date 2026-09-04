@@ -1,0 +1,47 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Secrets & Local Configurations (DO NOT COMMIT)
+config.json
+.env
+*.pem
+*.key
+
+# SQLite Databases & Local Logs
+*.db
+*.sqlite
+*.sqlite3
+test_*.db
+*.log
+
+# Exported Performance CSVS
+alert_performance_results.csv
+
+# IDEs & System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
