@@ -204,41 +204,42 @@ class WeexClient:
         client_order_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Places a market contract order with attached Take Profit & Stop Loss.
+        Places a market contract order on WEEX V3 (/capi/v3/order) with attached Take Profit & Stop Loss.
         """
+        client_id = client_order_id or f"mexc-{int(time.time() * 1000)}"
         payload: Dict[str, Any] = {
             "symbol": symbol,
             "side": side.upper(),
-            "positionSide": position_side.upper(),
             "type": "MARKET",
+            "positionSide": position_side.upper(),
             "quantity": str(quantity),
+            "newClientOrderId": client_id,
         }
-
-        if client_order_id:
-            payload["clientOrderId"] = client_order_id
 
         # Attach Take Profit plan if provided
         if tp_price and tp_price > 0:
-            payload["takeProfit"] = {
-                "triggerPrice": str(tp_price),
-                "executePrice": str(tp_price),
-                "type": "MARKET",
-            }
+            payload["tpTriggerPrice"] = str(tp_price)
+            payload["tpWorkingType"] = "MARK_PRICE"
 
         # Attach Stop Loss plan if provided
         if sl_price and sl_price > 0:
-            payload["stopLoss"] = {
-                "triggerPrice": str(sl_price),
-                "executePrice": str(sl_price),
-                "type": "MARKET",
-            }
+            payload["slTriggerPrice"] = str(sl_price)
+            payload["slWorkingType"] = "MARK_PRICE"
 
-        res = self.request("POST", "/capi/v3/order/placeOrder", payload)
-        code = res.get("code")
-        order_data = res.get("data", {})
-        order_id = order_data.get("orderId") if isinstance(order_data, dict) else None
+        res = self.request("POST", "/capi/v3/order", payload)
+        order_data = res.get("data", {}) if isinstance(res, dict) else {}
+        order_id = None
+        if isinstance(order_data, dict):
+            order_id = order_data.get("orderId")
+        if not order_id and isinstance(res, dict):
+            order_id = res.get("orderId")
 
-        success = code in (0, "0", 200, "200") or res.get("success", False)
+        code = str(res.get("code", "")) if isinstance(res, dict) else ""
+        http_status = res.get("status") if isinstance(res, dict) else None
+        success = (
+            http_status != 404
+            and (code in ("0", "00000", "200") or bool(order_id) or (isinstance(res, dict) and res.get("success", False)))
+        )
         return {
             "success": success,
             "orderId": order_id,
