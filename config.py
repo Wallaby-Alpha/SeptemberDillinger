@@ -212,7 +212,10 @@ def _apply_env_overrides(config: ScannerConfig) -> None:
     """Apply environment variables if present."""
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     if bot_token:
-        config.telegram.bot_token = bot_token.strip().strip("'\"")
+        clean_token = bot_token.strip().strip("'\"")
+        if clean_token.lower().startswith("bot") and ":" in clean_token:
+            clean_token = clean_token[3:]
+        config.telegram.bot_token = clean_token
 
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     if chat_id:

@@ -27,17 +27,30 @@ def main():
 
     # Overrides
     if args.token:
-        config.telegram.bot_token = args.token
+        config.telegram.bot_token = args.token.strip().strip("'\"")
     if args.chat_id:
-        config.telegram.chat_id = args.chat_id
+        config.telegram.chat_id = args.chat_id.strip().strip("'\"")
     if args.thread_id:
         config.telegram.thread_id = args.thread_id
+
+    # Defensive cleanup on bot_token
+    token = config.telegram.bot_token
+    if token.lower().startswith("bot") and ":" in token:
+        token = token[3:]
+        config.telegram.bot_token = token
+
+    if token and len(token) > 10 and token != "YOUR_TELEGRAM_BOT_TOKEN_HERE":
+        token_display = f"{token[:6]}...{token[-4:]} (Length: {len(token)} chars)"
+    elif token:
+        token_display = f"[CONFIGURED - Length: {len(token)} chars]"
+    else:
+        token_display = "[MISSING / EMPTY]"
 
     print("\n" + "═" * 60)
     print("🤖 TELEGRAM BOT DIAGNOSTIC & CONNECTION CHECK")
     print("═" * 60)
     print(f"• Config File: {args.config}")
-    print(f"• Bot Token:   {'[CONFIGURED]' if config.telegram.bot_token and config.telegram.bot_token != 'YOUR_TELEGRAM_BOT_TOKEN_HERE' else '[MISSING / DEFAULT]'}")
+    print(f"• Bot Token:   {token_display}")
     print(f"• Chat ID:     {config.telegram.chat_id or '[MISSING]'}")
     print(f"• Thread ID:   {config.telegram.thread_id or 'None (Main Chat)'}")
     print(f"• Enabled:     {config.telegram.enabled}")
@@ -45,14 +58,13 @@ def main():
 
     if not config.telegram.bot_token or config.telegram.bot_token == "YOUR_TELEGRAM_BOT_TOKEN_HERE":
         print("\n❌ [DIAGNOSTIC FAILED] Bot token is missing or set to placeholder.")
-        print("👉 Solution: Add your bot token into .env or config.json:")
+        print("👉 Solution: Add your bot token into .env:")
         print("   TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz")
-        print("   TELEGRAM_CHAT_ID=123456789 (or -100... for channels/groups)")
         sys.exit(1)
 
     if not config.telegram.chat_id or config.telegram.chat_id == "YOUR_TELEGRAM_CHAT_ID_HERE":
         print("\n❌ [DIAGNOSTIC FAILED] Chat ID is missing or set to placeholder.")
-        print("👉 Solution: Set your Chat ID in .env or config.json:")
+        print("👉 Solution: Set your Chat ID in .env:")
         print("   TELEGRAM_CHAT_ID=YOUR_CHAT_ID")
         sys.exit(1)
 
@@ -65,7 +77,13 @@ def main():
             bot_info = data.get("result", {})
             print(f"✅ Bot Token Valid! Bot Name: @{bot_info.get('username')} ({bot_info.get('first_name')})")
         else:
-            print(f"❌ Bot Token Invalid: {data.get('description')}")
+            print(f"❌ Bot Token Invalid: {data.get('description')} (HTTP {r.status_code})")
+            print("\n💡 Troubleshooting Tips:")
+            print("1. Telegram bot tokens must look like: 1234567890:ABCdefGHIjklMNOpqrsTUVwxyz")
+            print("   (Numbers before the colon, followed by ~35 letters/numbers).")
+            print("2. If you copied from @BotFather, make sure no characters were missed.")
+            print("3. Check if you recently revoked or regenerated this token in @BotFather.")
+            print("4. You can test a token directly: python test_telegram.py --token 'YOUR_NEW_TOKEN'")
             sys.exit(1)
     except Exception as e:
         print(f"❌ Connection error reaching Telegram API: {e}")
