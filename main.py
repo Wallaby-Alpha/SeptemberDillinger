@@ -89,6 +89,15 @@ def main():
     print(f"• Alert Threshold: Score ≥ {config.min_alert_score}")
     print(f"• Cooldown Period: {config.cooldown_minutes} minutes")
     print(f"• Telegram Active: {'YES' if telegram_mgr.is_configured() else 'NO (Dry-run / Console only)'}")
+    if config.weex.enabled:
+        mode_str = "DRY-RUN (Simulated)" if config.weex.dry_run else "LIVE TRADING"
+        if config.weex.fixed_order_usdt:
+            size_str = f"Fixed ${config.weex.fixed_order_usdt:.2f} USDT"
+        else:
+            size_str = f"{config.weex.position_size_pct * 100:.1f}% margin"
+        print(f"• WEEX Execution: ACTIVE ({mode_str}) | Leverage: {config.weex.leverage}x | Size: {size_str}")
+    else:
+        print("• WEEX Execution: DISABLED")
     print("█" * 70 + "\n")
 
     # Graceful shutdown handler

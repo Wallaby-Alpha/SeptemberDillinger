@@ -269,20 +269,26 @@ def _apply_env_overrides(config: ScannerConfig) -> None:
     weex_lev = os.getenv("WEEX_LEVERAGE")
     if weex_lev:
         try:
-            config.weex.leverage = int(weex_lev)
-        except ValueError:
-            pass
+            cleaned_lev = weex_lev.strip().strip("'\"").lower().rstrip("x").strip()
+            config.weex.leverage = int(float(cleaned_lev))
+        except (ValueError, TypeError) as e:
+            print(f"[WARN] Failed to parse WEEX_LEVERAGE='{weex_lev}': {e}. Using default {config.weex.leverage}x")
 
     weex_pos_pct = os.getenv("WEEX_POSITION_SIZE_PCT")
     if weex_pos_pct:
         try:
-            config.weex.position_size_pct = float(weex_pos_pct)
-        except ValueError:
-            pass
+            cleaned_pct = weex_pos_pct.strip().strip("'\"").rstrip("%").strip()
+            val = float(cleaned_pct)
+            if val > 1.0:
+                val = val / 100.0
+            config.weex.position_size_pct = val
+        except (ValueError, TypeError) as e:
+            print(f"[WARN] Failed to parse WEEX_POSITION_SIZE_PCT='{weex_pos_pct}': {e}")
 
     weex_fixed_usdt = os.getenv("WEEX_FIXED_ORDER_USDT")
     if weex_fixed_usdt:
         try:
-            config.weex.fixed_order_usdt = float(weex_fixed_usdt)
-        except ValueError:
-            pass
+            cleaned_usdt = weex_fixed_usdt.strip().strip("'\"").lstrip("$").strip()
+            config.weex.fixed_order_usdt = float(cleaned_usdt)
+        except (ValueError, TypeError) as e:
+            print(f"[WARN] Failed to parse WEEX_FIXED_ORDER_USDT='{weex_fixed_usdt}': {e}")
