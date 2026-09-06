@@ -57,15 +57,17 @@ class TelegramAlertManager:
 
         weex_status_section = ""
         if weex_outcome:
+            notional_val = getattr(weex_outcome, "notional_usd", 0.0)
+            notional_str = f" (~${notional_val:.2f} USD)" if notional_val > 0 else ""
             if getattr(weex_outcome, "status", None) == "EXECUTED":
                 weex_status_section = (
                     f"🏛 <b>WEEX:</b> ✅ <code>LONG {weex_outcome.weex_symbol}</code> "
-                    f"(Qty: {weex_outcome.quantity} | SL: ${weex_outcome.stop_loss:.4f} | TP: ${weex_outcome.take_profit:.4f})\n"
+                    f"(Qty: {weex_outcome.quantity}{notional_str} | SL: ${weex_outcome.stop_loss:.4f} | TP: ${weex_outcome.take_profit:.4f})\n"
                 )
             elif getattr(weex_outcome, "status", None) == "SIMULATED":
                 weex_status_section = (
                     f"🏛 <b>WEEX:</b> 🧪 <code>Simulated LONG {weex_outcome.weex_symbol}</code> "
-                    f"({weex_outcome.leverage}x | Qty: {weex_outcome.quantity})\n"
+                    f"({weex_outcome.leverage}x | Qty: {weex_outcome.quantity}{notional_str})\n"
                 )
             elif getattr(weex_outcome, "status", None) == "UNLISTED":
                 weex_status_section = "🏛 <b>WEEX:</b> ⚠️ <i>Not Listed on WEEX Contracts (Skipped)</i>\n"

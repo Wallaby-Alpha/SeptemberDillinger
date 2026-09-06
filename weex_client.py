@@ -161,12 +161,23 @@ class WeexClient:
         res = self.request("GET", "/capi/v3/account/balance")
         balances = res if isinstance(res, list) else res.get("data", [])
         if isinstance(balances, dict):
-            balances = balances.get("list", [])
+            balances = balances.get("list", []) or [balances]
 
         for b in balances:
-            if b.get("asset") == "USDT":
+            if not isinstance(b, dict):
+                continue
+            asset = (b.get("asset") or b.get("marginAsset") or "").upper()
+            if asset == "USDT":
+                val = (
+                    b.get("available")
+                    or b.get("availableBalance")
+                    or b.get("crossMarginAvailable")
+                    or b.get("balance")
+                    or b.get("equity")
+                    or 0.0
+                )
                 try:
-                    return float(b.get("availableBalance") or b.get("balance") or 0.0)
+                    return float(val)
                 except (ValueError, TypeError):
                     pass
         return 0.0

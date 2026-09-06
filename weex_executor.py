@@ -29,6 +29,7 @@ class WeexExecutionOutcome:
     stop_loss: float
     take_profit: float
     leverage: int
+    notional_usd: float = 0.0
     order_id: Optional[str] = None
     message: str = ""
 
@@ -98,16 +99,29 @@ class WeexTradeExecutor:
         leverage = min(self.config.leverage, resolved.max_leverage)
 
         if self.config.fixed_order_usdt and self.config.fixed_order_usdt > 0:
-            notional = self.config.fixed_order_usdt * leverage
+            allocated = self.config.fixed_order_usdt
+            notional = allocated * leverage
+            sizing_mode = f"Fixed ${allocated:.2f} USDT"
         else:
             allocated = available_balance * self.config.position_size_pct
             notional = allocated * leverage
+            sizing_mode = f"{self.config.position_size_pct * 100:.1f}% of ${available_balance:.2f} balance"
 
         raw_qty = notional / entry_price
         qty_factor = 10 ** resolved.quantity_precision
         quantity = math.floor(raw_qty * qty_factor) / qty_factor
+        clamped_to_min = False
         if quantity < resolved.min_order_size:
             quantity = resolved.min_order_size
+            clamped_to_min = True
+
+        notional_usd = quantity * entry_price
+        clamp_note = f" [CLAMPED to minOrderSize={resolved.min_order_size}]" if clamped_to_min else ""
+        logger.info(
+            f"[WEEX SIZING] {resolved.weex_symbol} | Mode: {sizing_mode} | "
+            f"Notional: ${notional:.2f} (Allocated: ${allocated:.2f} x {leverage}x Lev) | "
+            f"MarkPrice: ${entry_price:.4f} | RawQty: {raw_qty:.4f} -> FinalQty: {quantity}{clamp_note} (~${notional_usd:.2f} USD)"
+        )
 
         # 4. Stop Loss & Take Profit Price Calculation
         # Stop loss is placed at suggested_stop (scaled by multiplier if needed)
@@ -126,7 +140,7 @@ class WeexTradeExecutor:
         if self.config.dry_run:
             log_msg = (
                 f"[WEEX DRY-RUN] Simulated LONG on {resolved.weex_symbol} "
-                f"| Qty: {quantity} | Leverage: {leverage}x | Entry: ${entry_price:.4f} "
+                f"| Qty: {quantity} (~${notional_usd:.2f} USD) | Leverage: {leverage}x | Entry: ${entry_price:.4f} "
                 f"| SL: ${sl_price:.4f} | TP: ${tp_price:.4f}"
             )
             logger.info(log_msg)
@@ -139,6 +153,7 @@ class WeexTradeExecutor:
                 stop_loss=sl_price,
                 take_profit=tp_price,
                 leverage=leverage,
+                notional_usd=notional_usd,
                 message=log_msg,
             )
 
@@ -161,7 +176,7 @@ class WeexTradeExecutor:
                 order_id = str(order_res.get("orderId", ""))
                 success_msg = (
                     f"LIVE WEEX ORDER PLACED on {resolved.weex_symbol}: "
-                    f"LONG {quantity} units @ ${entry_price:.4f} (Order ID: {order_id})"
+                    f"LONG {quantity} units (~${notional_usd:.2f} USD) @ ${entry_price:.4f} (Order ID: {order_id})"
                 )
                 logger.info(f"[WEEX_EXECUTOR] {success_msg}")
                 return WeexExecutionOutcome(
@@ -173,6 +188,7 @@ class WeexTradeExecutor:
                     stop_loss=sl_price,
                     take_profit=tp_price,
                     leverage=leverage,
+                    notional_usd=notional_usd,
                     order_id=order_id,
                     message=success_msg,
                 )
