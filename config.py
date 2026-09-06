@@ -24,7 +24,7 @@ class TelegramConfig:
 
 @dataclass
 class HardGatesConfig:
-    min_24h_quote_volume: float = 250000.0  # Min $250k quote volume
+    min_24h_quote_volume: float = 100000.0  # Min $100k quote volume (ensures 200+ liquid pairs)
     max_spread_bps: float = 80.0            # Max 80 bps (0.80%)
     min_1h_candles: int = 100               # Min 100 candles for reliable EMA/RS
     max_ema20_1h_extension_pct: float = 0.12  # Price not > 12% above EMA20 (1h)
@@ -60,6 +60,8 @@ class ScannerConfig:
     cooldown_minutes: int = 180            # 3 hours per symbol cooldown
     min_alert_score: float = 0.65          # Alert threshold
     min_log_score: float = 0.45            # Minimum score to record candidate in DB
+    max_pairs: int = 200                   # Target universe size (top N coins by 24h volume)
+    weex_only_universe: bool = False       # If True, only scan pairs listed on WEEX Contracts
     
     # Symbols filter
     quote_currency: str = "USDT"
@@ -136,6 +138,10 @@ def _apply_dict_to_config(config: ScannerConfig, data: dict[str, Any]) -> None:
         config.min_log_score = float(data["min_log_score"])
     if "database_path" in data:
         config.database_path = str(data["database_path"])
+    if "max_pairs" in data:
+        config.max_pairs = int(data["max_pairs"])
+    if "weex_only_universe" in data:
+        config.weex_only_universe = bool(data["weex_only_universe"])
     if "excluded_keywords" in data and isinstance(data["excluded_keywords"], list):
         config.excluded_keywords = data["excluded_keywords"]
     if "request_delay_seconds" in data:
@@ -240,6 +246,17 @@ def _apply_env_overrides(config: ScannerConfig) -> None:
     db_path = os.getenv("DATABASE_PATH")
     if db_path:
         config.database_path = db_path
+
+    max_pairs_env = os.getenv("MAX_PAIRS")
+    if max_pairs_env:
+        try:
+            config.max_pairs = int(max_pairs_env.strip())
+        except ValueError:
+            pass
+
+    weex_only_env = os.getenv("WEEX_ONLY_UNIVERSE")
+    if weex_only_env is not None:
+        config.weex_only_universe = weex_only_env.lower() in ("true", "1", "yes")
 
     # WEEX environment variables
     weex_enabled = os.getenv("WEEX_ENABLED")

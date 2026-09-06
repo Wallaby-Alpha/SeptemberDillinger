@@ -86,6 +86,7 @@ def main():
     print("█" * 70)
     print(f"• Database: {config.database_path}")
     print(f"• Scan Interval: {config.scan_interval_seconds}s ({(config.scan_interval_seconds/60):.1f} mins)")
+    print(f"• Target Universe: Top {config.max_pairs} pairs by 24h volume (Min Vol: ${config.gates.min_24h_quote_volume:,.0f})")
     print(f"• Alert Threshold: Score ≥ {config.min_alert_score}")
     print(f"• Cooldown Period: {config.cooldown_minutes} minutes")
     print(f"• Telegram Active: {'YES' if telegram_mgr.is_configured() else 'NO (Dry-run / Console only)'}")

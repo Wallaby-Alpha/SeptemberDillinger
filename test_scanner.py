@@ -97,7 +97,7 @@ class TestScannerScoring(unittest.TestCase):
         result = evaluate_hard_gates(
             df_1h=self.df_1h_normal,
             df_1d=self.df_1d,
-            quote_volume_24h=100000.0,  # Below $250k
+            quote_volume_24h=50000.0,  # Below $100k threshold
             spread_bps=30.0,
             gates=self.gates,
         )

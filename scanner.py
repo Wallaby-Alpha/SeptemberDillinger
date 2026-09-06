@@ -78,8 +78,21 @@ class AccumulationScanner:
             excluded_keywords=self.config.excluded_keywords,
         )
 
+        initial_count = len(tickers)
+
+        # Optional: Filter for only tokens listed on WEEX Contracts
+        if self.config.weex_only_universe and self.config.weex.enabled:
+            print("[INIT] Filtering universe to only WEEX-listed tokens (WEEX_ONLY_UNIVERSE=true)...")
+            self.weex_resolver.refresh_markets()
+            tickers = [t for t in tickers if self.weex_resolver.is_listed_on_weex(t["symbol"])]
+            print(f"[INIT] Retained {len(tickers)} pairs listed on both MEXC and WEEX.")
+
+        # Limit to top N pairs by 24h volume
+        if self.config.max_pairs and len(tickers) > self.config.max_pairs:
+            tickers = tickers[:self.config.max_pairs]
+
         total_tickers = len(tickers)
-        print(f"[INIT] Found {total_tickers} active USDT pairs meeting volume filter (>= ${self.config.gates.min_24h_quote_volume:,.0f}).")
+        print(f"[INIT] Active Scan Universe: {total_tickers} pairs (Target Top {self.config.max_pairs} by 24h volume from {initial_count} filtered).")
 
         gated_count = 0
         scored_count = 0
