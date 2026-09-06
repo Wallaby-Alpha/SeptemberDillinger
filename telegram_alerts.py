@@ -34,7 +34,7 @@ class TelegramAlertManager:
         """Check whether the symbol is allowed to trigger an alert (cooldown check)."""
         return not self.db.is_on_cooldown(symbol, self.cooldown_minutes)
 
-    def format_alert_message_html(self, result: ScoringResult) -> str:
+    def format_alert_message_html(self, result: ScoringResult, weex_outcome: Optional[Any] = None) -> str:
         """Format a clean, structured HTML message for the Stage 1 Accumulation alert."""
         if result.price >= 1.0:
             price_fmt = f"${result.price:,.4f}"
@@ -55,6 +55,24 @@ class TelegramAlertManager:
         base_asset = clean_symbol.split("/")[0]
         mexc_link = f"https://www.mexc.com/exchange/{base_asset}_USDT"
 
+        weex_status_section = ""
+        if weex_outcome:
+            if getattr(weex_outcome, "status", None) == "EXECUTED":
+                weex_status_section = (
+                    f"🏛 <b>WEEX:</b> ✅ <code>LONG {weex_outcome.weex_symbol}</code> "
+                    f"(Qty: {weex_outcome.quantity} | SL: ${weex_outcome.stop_loss:.4f} | TP: ${weex_outcome.take_profit:.4f})\n"
+                )
+            elif getattr(weex_outcome, "status", None) == "SIMULATED":
+                weex_status_section = (
+                    f"🏛 <b>WEEX:</b> 🧪 <code>Simulated LONG {weex_outcome.weex_symbol}</code> "
+                    f"({weex_outcome.leverage}x | Qty: {weex_outcome.quantity})\n"
+                )
+            elif getattr(weex_outcome, "status", None) == "UNLISTED":
+                weex_status_section = "🏛 <b>WEEX:</b> ⚠️ <i>Not Listed on WEEX Contracts (Skipped)</i>\n"
+            elif getattr(weex_outcome, "status", None) == "FAILED":
+                clean_err = html.escape(str(getattr(weex_outcome, 'message', 'Failed'))[:60])
+                weex_status_section = f"🏛 <b>WEEX:</b> ❌ <i>Order Failed: {clean_err}</i>\n"
+
         msg = (
             f"🚨 <b>STAGE 1 ALERT: QUIET ACCUMULATION</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -71,15 +89,16 @@ class TelegramAlertManager:
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🎯 <b>Suggested Entry Zone:</b> <code>{entry_low_fmt} – {entry_high_fmt}</code>\n"
             f"🛑 <b>Conservative Stop:</b> <code>{stop_fmt}</code> (-{result.risk_to_stop_pct:.2f}% risk)\n"
+            f"{weex_status_section}"
             f"🔗 <a href=\"{mexc_link}\">Trade on MEXC Spot</a>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🔬 <i>Research & Signal Tracking Only. Not Financial Advice.</i>"
         )
         return msg
 
-    def format_alert_message(self, result: ScoringResult) -> str:
+    def format_alert_message(self, result: ScoringResult, weex_outcome: Optional[Any] = None) -> str:
         """Alias for backward compatibility."""
-        return self.format_alert_message_html(result)
+        return self.format_alert_message_html(result, weex_outcome)
 
     def send_test_message(self, text: Optional[str] = None) -> bool:
         """Send an immediate test ping message to verify Telegram setup."""
@@ -116,7 +135,7 @@ class TelegramAlertManager:
             print(f"[ERROR] HTTP request failed when connecting to Telegram: {e}")
             return False
 
-    def send_alert(self, result: ScoringResult) -> bool:
+    def send_alert(self, result: ScoringResult, weex_outcome: Optional[Any] = None) -> bool:
         """
         Send Telegram notification if configured and not on cooldown.
         Returns True if sent or handled in dry-run mode.
@@ -125,7 +144,7 @@ class TelegramAlertManager:
             print(f"[COOLDOWN] {result.symbol} is currently cooling down ({self.cooldown_minutes}m). Skipping alert.")
             return False
 
-        message_html = self.format_alert_message_html(result)
+        message_html = self.format_alert_message_html(result, weex_outcome)
 
         if not self.is_configured():
             print("\n[TELEGRAM DRY-RUN / CONSOLE ALERT]")

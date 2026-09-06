@@ -19,6 +19,9 @@ from scoring import (
     evaluate_hard_gates,
 )
 from telegram_alerts import TelegramAlertManager
+from weex_client import WeexClient
+from weex_executor import WeexTradeExecutor
+from weex_resolver import WeexSymbolResolver
 
 
 class AccumulationScanner:
@@ -28,12 +31,18 @@ class AccumulationScanner:
         db: Optional[Database] = None,
         client: Optional[MexcClient] = None,
         telegram: Optional[TelegramAlertManager] = None,
+        weex_executor: Optional[WeexTradeExecutor] = None,
     ):
         self.config = config
         self.db = db or Database(config.database_path)
         self.client = client or MexcClient(config.request_delay_seconds)
         self.telegram = telegram or TelegramAlertManager(
             config.telegram, self.db, config.cooldown_minutes
+        )
+        self.weex_client = WeexClient(config.weex)
+        self.weex_resolver = WeexSymbolResolver(self.weex_client)
+        self.weex_executor = weex_executor or WeexTradeExecutor(
+            config.weex, self.weex_client, self.weex_resolver
         )
 
     def scan_cycle(self) -> List[ScoringResult]:
@@ -161,8 +170,24 @@ class AccumulationScanner:
                     print(f"  [COOLDOWN] {symbol} high score ({score_res.final_score:.2f}) but in cooldown.")
                     continue
 
-                # Dispatch Telegram alert
-                alert_sent = self.telegram.send_alert(score_res)
+                # Execute or simulate trade on WEEX if enabled
+                weex_outcome = None
+                if self.config.weex.enabled:
+                    try:
+                        weex_outcome = self.weex_executor.execute_alert_signal(score_res)
+                        if weex_outcome.status == "EXECUTED":
+                            print(f"  🚀 [WEEX ORDER PLACED] {weex_outcome.message}")
+                        elif weex_outcome.status == "SIMULATED":
+                            print(f"  🧪 [WEEX DRY-RUN] {weex_outcome.message}")
+                        elif weex_outcome.status == "UNLISTED":
+                            print(f"  ⚠️ [WEEX UNLISTED] {symbol} not available on WEEX Contracts (Skipped)")
+                        elif weex_outcome.status == "FAILED":
+                            print(f"  ❌ [WEEX FAILED] {weex_outcome.message}")
+                    except Exception as wex_err:
+                        print(f"  ❌ [WEEX EXCEPTION] {symbol}: {wex_err}")
+
+                # Dispatch Telegram alert (includes WEEX execution status)
+                alert_sent = self.telegram.send_alert(score_res, weex_outcome=weex_outcome)
 
                 # Persist to alerts table in SQLite
                 alert_id = self.db.save_alert(
@@ -189,6 +214,8 @@ class AccumulationScanner:
                         "alt_ret_6h": score_res.alt_return_6h_pct,
                         "btc_ret_6h": score_res.btc_return_6h_pct,
                         "risk_to_stop_pct": score_res.risk_to_stop_pct,
+                        "weex_status": getattr(weex_outcome, "status", "DISABLED"),
+                        "weex_symbol": getattr(weex_outcome, "weex_symbol", None),
                     },
                 )
 

@@ -40,6 +40,20 @@ class ScoringWeightsConfig:
 
 
 @dataclass
+class WeexConfig:
+    enabled: bool = False
+    dry_run: bool = True
+    api_key: str = ""
+    api_secret: str = ""
+    passphrase: str = ""
+    base_url: str = "https://api-contract.weex.com"
+    position_size_pct: float = 0.10  # 10% of available margin per trade
+    fixed_order_usdt: Optional[float] = None  # If set, trades fixed USDT notional
+    leverage: int = 3
+    take_profit_rr: float = 2.0
+
+
+@dataclass
 class ScannerConfig:
     # General
     scan_interval_seconds: int = 300       # 5 minutes
@@ -68,6 +82,7 @@ class ScannerConfig:
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     gates: HardGatesConfig = field(default_factory=HardGatesConfig)
     weights: ScoringWeightsConfig = field(default_factory=ScoringWeightsConfig)
+    weex: WeexConfig = field(default_factory=WeexConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> ScannerConfig:
@@ -163,6 +178,29 @@ def _apply_dict_to_config(config: ScannerConfig, data: dict[str, Any]) -> None:
         if "weight_liquidity" in w:
             config.weights.weight_liquidity = float(w["weight_liquidity"])
 
+    if "weex" in data and isinstance(data["weex"], dict):
+        wx = data["weex"]
+        if "enabled" in wx:
+            config.weex.enabled = bool(wx["enabled"])
+        if "dry_run" in wx:
+            config.weex.dry_run = bool(wx["dry_run"])
+        if "api_key" in wx:
+            config.weex.api_key = str(wx["api_key"])
+        if "api_secret" in wx:
+            config.weex.api_secret = str(wx["api_secret"])
+        if "passphrase" in wx:
+            config.weex.passphrase = str(wx["passphrase"])
+        if "base_url" in wx:
+            config.weex.base_url = str(wx["base_url"])
+        if "position_size_pct" in wx:
+            config.weex.position_size_pct = float(wx["position_size_pct"])
+        if "fixed_order_usdt" in wx:
+            config.weex.fixed_order_usdt = float(wx["fixed_order_usdt"]) if wx["fixed_order_usdt"] else None
+        if "leverage" in wx:
+            config.weex.leverage = int(wx["leverage"])
+        if "take_profit_rr" in wx:
+            config.weex.take_profit_rr = float(wx["take_profit_rr"])
+
 
 def _apply_env_overrides(config: ScannerConfig) -> None:
     """Apply environment variables if present."""
@@ -202,3 +240,49 @@ def _apply_env_overrides(config: ScannerConfig) -> None:
     db_path = os.getenv("DATABASE_PATH")
     if db_path:
         config.database_path = db_path
+
+    # WEEX environment variables
+    weex_enabled = os.getenv("WEEX_ENABLED")
+    if weex_enabled is not None:
+        config.weex.enabled = weex_enabled.lower() in ("true", "1", "yes")
+
+    weex_dry_run = os.getenv("WEEX_DRY_RUN")
+    if weex_dry_run is not None:
+        config.weex.dry_run = weex_dry_run.lower() in ("true", "1", "yes")
+
+    weex_key = os.getenv("WEEX_API_KEY")
+    if weex_key:
+        config.weex.api_key = weex_key.strip()
+
+    weex_secret = os.getenv("WEEX_API_SECRET")
+    if weex_secret:
+        config.weex.api_secret = weex_secret.strip()
+
+    weex_pass = os.getenv("WEEX_PASSPHRASE")
+    if weex_pass:
+        config.weex.passphrase = weex_pass.strip()
+
+    weex_base = os.getenv("WEEX_BASE_URL")
+    if weex_base:
+        config.weex.base_url = weex_base.strip()
+
+    weex_lev = os.getenv("WEEX_LEVERAGE")
+    if weex_lev:
+        try:
+            config.weex.leverage = int(weex_lev)
+        except ValueError:
+            pass
+
+    weex_pos_pct = os.getenv("WEEX_POSITION_SIZE_PCT")
+    if weex_pos_pct:
+        try:
+            config.weex.position_size_pct = float(weex_pos_pct)
+        except ValueError:
+            pass
+
+    weex_fixed_usdt = os.getenv("WEEX_FIXED_ORDER_USDT")
+    if weex_fixed_usdt:
+        try:
+            config.weex.fixed_order_usdt = float(weex_fixed_usdt)
+        except ValueError:
+            pass

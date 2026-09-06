@@ -104,8 +104,14 @@ def main():
 
     try:
         while running:
-            # Run scan cycle
-            scanner.scan_cycle()
+            try:
+                # Run scan cycle
+                scanner.scan_cycle()
+            except Exception as e:
+                import traceback
+                print(f"\n[ERROR] An unexpected error occurred during the scan cycle: {e}")
+                traceback.print_exc()
+                print("[INFO] The scanner will sleep and try again next cycle to avoid crashing.")
 
             if args.once:
                 print("[INFO] Single scan cycle complete (--once). Exiting.")
