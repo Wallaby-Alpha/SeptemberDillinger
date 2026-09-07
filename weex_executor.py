@@ -82,10 +82,16 @@ class WeexTradeExecutor:
 
         # 2. Determine contract entry price and mark price
         weex_mark = self.client.get_mark_price(resolved.weex_symbol)
-        if weex_mark and weex_mark > 0:
-            entry_price = weex_mark
+        if weex_mark is not None:
+            try:
+                if float(weex_mark) > 0:
+                    entry_price = float(weex_mark)
+                else:
+                    entry_price = float(result.price) * float(resolved.multiplier)
+            except (ValueError, TypeError):
+                entry_price = float(result.price) * float(resolved.multiplier)
         else:
-            entry_price = result.price * resolved.multiplier
+            entry_price = float(result.price) * float(resolved.multiplier)
 
         # 3. Position Sizing
         try:
@@ -96,26 +102,39 @@ class WeexTradeExecutor:
         if available_balance <= 0:
             available_balance = 1000.0  # Safe simulation baseline
 
-        leverage = min(self.config.leverage, resolved.max_leverage)
+        leverage = min(int(self.config.leverage), int(resolved.max_leverage))
 
-        if self.config.fixed_order_usdt and self.config.fixed_order_usdt > 0:
-            allocated = self.config.fixed_order_usdt
+        fixed_usdt = None
+        if self.config.fixed_order_usdt is not None:
+            try:
+                fixed_usdt = float(self.config.fixed_order_usdt)
+            except (ValueError, TypeError):
+                fixed_usdt = None
+
+        if fixed_usdt is not None and fixed_usdt > 0:
+            allocated = fixed_usdt
             notional = allocated * leverage
             sizing_mode = f"Fixed ${allocated:.2f} USDT"
         else:
-            allocated = available_balance * self.config.position_size_pct
+            pos_pct = float(self.config.position_size_pct)
+            allocated = available_balance * pos_pct
             notional = allocated * leverage
-            sizing_mode = f"{self.config.position_size_pct * 100:.1f}% of ${available_balance:.2f} balance"
+            sizing_mode = f"{pos_pct * 100:.1f}% of ${available_balance:.2f} balance"
 
         raw_qty = notional / entry_price
-        qty_factor = 10 ** resolved.quantity_precision
+        qty_prec = int(resolved.quantity_precision)
+        price_prec = int(resolved.price_precision)
+        qty_factor = 10 ** qty_prec
         quantity = math.floor(raw_qty * qty_factor) / qty_factor
         clamped_to_min = False
-        if quantity < resolved.min_order_size:
-            quantity = resolved.min_order_size
+        min_order = float(resolved.min_order_size)
+        if quantity < min_order:
+            quantity = min_order
             clamped_to_min = True
+        if qty_prec == 0 or quantity.is_integer():
+            quantity = int(quantity)
 
-        notional_usd = quantity * entry_price
+        notional_usd = float(quantity) * entry_price
         clamp_note = f" [CLAMPED to minOrderSize={resolved.min_order_size}]" if clamped_to_min else ""
         logger.info(
             f"[WEEX SIZING] {resolved.weex_symbol} | Mode: {sizing_mode} | "
@@ -124,17 +143,20 @@ class WeexTradeExecutor:
         )
 
         # 4. Stop Loss & Take Profit Price Calculation
-        # Stop loss is placed at suggested_stop (scaled by multiplier if needed)
-        scale_ratio = entry_price / result.price if result.price > 0 else 1.0
-        sl_price = round(result.suggested_stop * scale_ratio, resolved.price_precision)
+        res_price = float(result.price) if result.price else entry_price
+        scale_ratio = entry_price / res_price if res_price > 0 else 1.0
+        sl_price = round(float(result.suggested_stop) * scale_ratio, price_prec)
 
         # Ensure SL is below entry for Long
         if sl_price >= entry_price:
-            sl_price = round(entry_price * 0.96, resolved.price_precision)
+            sl_price = round(entry_price * 0.96, price_prec)
 
         # Take Profit target: 2:1 R:R target
         risk_per_unit = max(entry_price - sl_price, entry_price * 0.02)
-        tp_price = round(entry_price + (risk_per_unit * self.config.take_profit_rr), resolved.price_precision)
+        tp_price = round(entry_price + (risk_per_unit * float(self.config.take_profit_rr)), price_prec)
+        if price_prec == 0:
+            sl_price = int(sl_price)
+            tp_price = int(tp_price)
 
         # 5. Dry-Run Execution Mode
         if self.config.dry_run:
@@ -209,7 +231,7 @@ class WeexTradeExecutor:
 
         except Exception as e:
             err_msg = f"Fatal execution exception on {resolved.weex_symbol}: {e}"
-            logger.error(f"[WEEX_EXECUTOR] {err_msg}")
+            logger.error(f"[WEEX_EXECUTOR] {err_msg}", exc_info=True)
             return WeexExecutionOutcome(
                 status="FAILED",
                 weex_symbol=resolved.weex_symbol,

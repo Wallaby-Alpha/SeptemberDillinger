@@ -190,8 +190,16 @@ class WeexClient:
             "isolatedShortLeverage": str(leverage),
         }
         res = self.request("POST", "/capi/v3/account/leverage", payload)
-        code = res.get("code")
-        return code in (0, "0", 200, "200") or res.get("success", False)
+        if not isinstance(res, dict):
+            return False
+        code = str(res.get("code", ""))
+        return (
+            code in ("0", "00000", "200")
+            or res.get("symbol") == symbol
+            or "crossLeverage" in res
+            or "isolatedLongLeverage" in res
+            or res.get("success", False)
+        )
 
     def place_order_with_tpsl(
         self,
@@ -207,24 +215,40 @@ class WeexClient:
         Places a market contract order on WEEX V3 (/capi/v3/order) with attached Take Profit & Stop Loss.
         """
         client_id = client_order_id or f"mexc-{int(time.time() * 1000)}"
+
+        # Clean quantity representation (avoid decimal for whole contract counts)
+        try:
+            qty_val = float(quantity)
+            qty_str = str(int(qty_val)) if qty_val.is_integer() else str(qty_val)
+        except (ValueError, TypeError):
+            qty_str = str(quantity)
+
         payload: Dict[str, Any] = {
             "symbol": symbol,
             "side": side.upper(),
             "type": "MARKET",
             "positionSide": position_side.upper(),
-            "quantity": str(quantity),
+            "quantity": qty_str,
             "newClientOrderId": client_id,
         }
 
-        # Attach Take Profit plan if provided
-        if tp_price and tp_price > 0:
-            payload["tpTriggerPrice"] = str(tp_price)
-            payload["tpWorkingType"] = "MARK_PRICE"
+        # Defensively attach Take Profit plan if provided
+        if tp_price is not None:
+            try:
+                if float(tp_price) > 0:
+                    payload["tpTriggerPrice"] = str(tp_price)
+                    payload["tpWorkingType"] = "MARK_PRICE"
+            except (ValueError, TypeError):
+                pass
 
-        # Attach Stop Loss plan if provided
-        if sl_price and sl_price > 0:
-            payload["slTriggerPrice"] = str(sl_price)
-            payload["slWorkingType"] = "MARK_PRICE"
+        # Defensively attach Stop Loss plan if provided
+        if sl_price is not None:
+            try:
+                if float(sl_price) > 0:
+                    payload["slTriggerPrice"] = str(sl_price)
+                    payload["slWorkingType"] = "MARK_PRICE"
+            except (ValueError, TypeError):
+                pass
 
         res = self.request("POST", "/capi/v3/order", payload)
         order_data = res.get("data", {}) if isinstance(res, dict) else {}
@@ -242,6 +266,6 @@ class WeexClient:
         )
         return {
             "success": success,
-            "orderId": order_id,
+            "orderId": str(order_id or ""),
             "raw": res,
         }
