@@ -23,9 +23,9 @@ logger = logging.getLogger("WEEX_CLIENT")
 class WeexClient:
     def __init__(self, config: WeexConfig):
         self.config = config
-        self.api_key = config.api_key.strip()
-        self.api_secret = config.api_secret.strip()
-        self.passphrase = config.passphrase.strip()
+        self.api_key = config.api_key.strip().strip("'\"")
+        self.api_secret = config.api_secret.strip().strip("'\"")
+        self.passphrase = config.passphrase.strip().strip("'\"")
         
         # Defensive cleanup on base_url
         clean_url = config.base_url.strip().strip("'\"")
@@ -86,6 +86,12 @@ class WeexClient:
                 "ACCESS-TIMESTAMP": timestamp,
                 "ACCESS-PASSPHRASE": self.passphrase,
             })
+            if getattr(self.config, 'is_demo', False):
+                headers.update({
+                    "X-SIMULATED-TRADING": "1",
+                    "paptrading": "1",
+                    "X-WEEX-DEMO": "true",
+                })
 
         for attempt in range(3):
             try:

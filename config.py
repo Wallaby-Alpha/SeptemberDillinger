@@ -53,6 +53,7 @@ class WeexConfig:
     hard_stop_loss_pct: float = 0.035         # Hard stop loss at -3.5%
     leverage: int = 3
     take_profit_rr: float = 1.0               # 1:1 TP (+3.5%) or 2:1 (+7.0%)
+    is_demo: bool = False                     # Set to True if using WEEX Demo API account
 
 
 @dataclass
@@ -278,21 +279,25 @@ def _apply_env_overrides(config: ScannerConfig) -> None:
     if weex_dry_run is not None:
         config.weex.dry_run = weex_dry_run.lower() in ("true", "1", "yes")
 
-    weex_key = os.getenv("WEEX_API_KEY")
+    weex_demo = os.getenv("WEEX_DEMO") or os.getenv("WEEX_PAPER_TRADING")
+    if weex_demo is not None:
+        config.weex.is_demo = weex_demo.lower() in ("true", "1", "yes")
+
+    weex_key = os.getenv("WEEX_API_KEY") or os.getenv("WEEX_KEY")
     if weex_key:
-        config.weex.api_key = weex_key.strip()
+        config.weex.api_key = weex_key.strip().strip("'\"")
 
-    weex_secret = os.getenv("WEEX_API_SECRET")
+    weex_secret = os.getenv("WEEX_API_SECRET") or os.getenv("WEEX_SECRET") or os.getenv("WEEX_SECRET_KEY")
     if weex_secret:
-        config.weex.api_secret = weex_secret.strip()
+        config.weex.api_secret = weex_secret.strip().strip("'\"")
 
-    weex_pass = os.getenv("WEEX_PASSPHRASE")
+    weex_pass = os.getenv("WEEX_PASSPHRASE") or os.getenv("WEEX_API_PASSPHRASE")
     if weex_pass:
-        config.weex.passphrase = weex_pass.strip()
+        config.weex.passphrase = weex_pass.strip().strip("'\"")
 
     weex_base = os.getenv("WEEX_BASE_URL")
     if weex_base:
-        config.weex.base_url = weex_base.strip()
+        config.weex.base_url = weex_base.strip().strip("'\"")
 
     weex_lev = os.getenv("WEEX_LEVERAGE")
     if weex_lev:
