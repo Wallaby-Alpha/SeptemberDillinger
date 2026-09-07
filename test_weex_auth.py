@@ -71,10 +71,19 @@ def main():
 
     # Test 1: Standard Live Request
     res = client.request("GET", "/capi/v3/account/balance")
-    print(f"[HTTP] Response Code: {res.get('code')}")
-    print(f"[HTTP] Response Msg:  {res.get('msg', 'N/A')}")
+    
+    if isinstance(res, list):
+        print("\n[SUCCESS] WEEX Contract API accepted your keys!")
+        print(f"[DATA] Found {len(res)} balance entries.")
+        print(f"[DATA] Account Balances: {json.dumps(res, indent=2)[:400]}...")
+        return
 
-    if res.get("code") in (0, "0", "00000", 200) or "data" in res:
+    code = res.get("code") if isinstance(res, dict) else None
+    msg = res.get("msg", "N/A") if isinstance(res, dict) else "N/A"
+    print(f"[HTTP] Response Code: {code}")
+    print(f"[HTTP] Response Msg:  {msg}")
+
+    if code in (0, "0", "00000", 200) or (isinstance(res, dict) and "data" in res):
         print("\n[SUCCESS] WEEX Contract API accepted your keys!")
         balances = res.get("data") or res.get("list") or res
         print(f"[DATA] Account Data: {json.dumps(balances, indent=2)[:300]}...")
