@@ -121,17 +121,30 @@ class WeexTradeExecutor:
             notional = allocated * leverage
             sizing_mode = f"{pos_pct * 100:.1f}% of ${available_balance:.2f} balance"
 
+        # Enforce minimum order notional of $15.0 USD to guarantee clearance of WEEX limits
+        min_notional = float(getattr(self.config, 'min_order_notional_usd', 15.0) or 15.0)
+        if notional < min_notional:
+            notional = min_notional
+            sizing_mode += f" [Enforced Min ${min_notional:.2f}]"
+
         raw_qty = notional / entry_price
         qty_prec = int(resolved.quantity_precision)
         price_prec = int(resolved.price_precision)
-        qty_factor = 10 ** qty_prec
-        quantity = math.floor(raw_qty * qty_factor) / qty_factor
+
+        # Handle negative quantityPrecision properly (e.g. 1000SHIB has quantityPrecision = -3 -> step = 1000)
+        if qty_prec < 0:
+            step = 10 ** abs(qty_prec)
+            quantity = math.floor(raw_qty / step) * step
+        else:
+            qty_factor = 10 ** qty_prec
+            quantity = math.floor(raw_qty * qty_factor) / qty_factor
+
         clamped_to_min = False
         min_order = float(resolved.min_order_size)
         if quantity < min_order:
             quantity = min_order
             clamped_to_min = True
-        if qty_prec == 0 or quantity.is_integer():
+        if qty_prec <= 0 or (isinstance(quantity, float) and quantity.is_integer()):
             quantity = int(quantity)
 
         notional_usd = float(quantity) * entry_price
@@ -142,18 +155,20 @@ class WeexTradeExecutor:
             f"MarkPrice: ${entry_price:.4f} | RawQty: {raw_qty:.4f} -> FinalQty: {quantity}{clamp_note} (~${notional_usd:.2f} USD)"
         )
 
-        # 4. Stop Loss & Take Profit Price Calculation
-        res_price = float(result.price) if result.price else entry_price
-        scale_ratio = entry_price / res_price if res_price > 0 else 1.0
-        sl_price = round(float(result.suggested_stop) * scale_ratio, price_prec)
+        # 4. Calibrated Stop Loss (-3.5%) & Take Profit Price Calculation
+        stop_pct = float(getattr(self.config, 'hard_stop_loss_pct', 0.035) or 0.035)
+        sl_price = round(entry_price * (1.0 - stop_pct), price_prec)
 
-        # Ensure SL is below entry for Long
+        # Ensure SL is strictly below entry
         if sl_price >= entry_price:
-            sl_price = round(entry_price * 0.96, price_prec)
+            sl_price = round(entry_price * (1.0 - stop_pct), price_prec + 2)
 
-        # Take Profit target: 2:1 R:R target
-        risk_per_unit = max(entry_price - sl_price, entry_price * 0.02)
-        tp_price = round(entry_price + (risk_per_unit * float(self.config.take_profit_rr)), price_prec)
+        # Take Profit target: 1:1 (+3.5%) or 2:1 (+7.0%)
+        rr = float(self.config.take_profit_rr or 1.0)
+        tp_price = round(entry_price * (1.0 + (stop_pct * rr)), price_prec)
+        if tp_price <= entry_price:
+            tp_price = round(entry_price * 1.035, price_prec + 2)
+
         if price_prec == 0:
             sl_price = int(sl_price)
             tp_price = int(tp_price)

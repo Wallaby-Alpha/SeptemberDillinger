@@ -72,7 +72,7 @@ class TelegramAlertManager:
             elif getattr(weex_outcome, "status", None) == "UNLISTED":
                 weex_status_section = "🏛 <b>WEEX:</b> ⚠️ <i>Not Listed on WEEX Contracts (Skipped)</i>\n"
             elif getattr(weex_outcome, "status", None) == "FAILED":
-                clean_err = html.escape(str(getattr(weex_outcome, 'message', 'Failed'))[:60])
+                clean_err = html.escape(str(getattr(weex_outcome, 'message', 'Failed'))[:150])
                 weex_status_section = f"🏛 <b>WEEX:</b> ❌ <i>Order Failed: {clean_err}</i>\n"
 
         msg = (
@@ -90,7 +90,8 @@ class TelegramAlertManager:
             f"• <b>Liquidity / Spread:</b> <code>{result.liq_score:.2f}</code> ({result.spread_bps:.1f} bps | Vol: ${result.quote_volume_24h:,.0f})\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🎯 <b>Suggested Entry Zone:</b> <code>{entry_low_fmt} – {entry_high_fmt}</code>\n"
-            f"🛑 <b>Conservative Stop:</b> <code>{stop_fmt}</code> (-{result.risk_to_stop_pct:.2f}% risk)\n"
+            f"🛑 <b>Calibrated Hard Stop:</b> <code>{stop_fmt}</code> (-3.50% risk)\n"
+            f"🎯 <b>Take-Profit Plan:</b> TP1 @ <code>+3.50%</code> (50%) | TP2 @ <code>+6.00%</code> (50%)\n"
             f"{weex_status_section}"
             f"🔗 <a href=\"{mexc_link}\">Trade on MEXC Spot</a>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"

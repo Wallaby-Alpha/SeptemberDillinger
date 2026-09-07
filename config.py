@@ -49,8 +49,10 @@ class WeexConfig:
     base_url: str = "https://api-contract.weex.com"
     position_size_pct: float = 0.10  # 10% of available margin per trade
     fixed_order_usdt: Optional[float] = None  # If set, trades fixed USDT notional
+    min_order_notional_usd: float = 15.0      # Minimum $15 notional to satisfy exchange minimums
+    hard_stop_loss_pct: float = 0.035         # Hard stop loss at -3.5%
     leverage: int = 3
-    take_profit_rr: float = 2.0
+    take_profit_rr: float = 1.0               # 1:1 TP (+3.5%) or 2:1 (+7.0%)
 
 
 @dataclass
@@ -58,7 +60,9 @@ class ScannerConfig:
     # General
     scan_interval_seconds: int = 300       # 5 minutes
     cooldown_minutes: int = 180            # 3 hours per symbol cooldown
-    min_alert_score: float = 0.65          # Alert threshold
+    min_alert_score: float = 0.72          # Calibrated alert threshold (was 0.65)
+    min_volume_ramp: float = 1.10          # Minimum 1.10x volume acceleration
+    min_rs_diff_pct: float = 1.50          # Minimum +1.50% RS outperformance vs BTC
     min_log_score: float = 0.45            # Minimum score to record candidate in DB
     max_pairs: int = 200                   # Target universe size (top N coins by 24h volume)
     weex_only_universe: bool = False       # If True, only scan pairs listed on WEEX Contracts
@@ -69,7 +73,11 @@ class ScannerConfig:
         default_factory=lambda: [
             "3L", "3S", "4L", "4S", "5L", "5S",
             "BEAR", "BULL", "DOWN", "UP",
-            "USDC", "FDUSD", "TUSD", "BUSD", "DAI", "USDD", "USDE", "EUR", "TRY"
+            "USDC", "FDUSD", "TUSD", "BUSD", "DAI", "USDD", "USDE", "EUR", "TRY",
+            # Major cap and meme exclusions (unsuited for Stage 1 accumulation)
+            "BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "SHIB", "ADA", "AVAX",
+            "DOT", "LINK", "MATIC", "POL", "SUI", "NEAR", "LTC", "BCH", "UNI",
+            "APT", "ICP", "PEPE", "WIF"
         ]
     )
     

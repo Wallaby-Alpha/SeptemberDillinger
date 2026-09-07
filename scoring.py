@@ -345,12 +345,12 @@ def calculate_quiet_accumulation_score(
     final_score = float(np.clip(final_score, 0.0, 1.0))
 
     # Stage Classification
-    # Stage 1: Orderly accumulation, price not blown out, healthy volume ratio, positive trend/RS
+    # Stage 1: Strictly orderly quiet accumulation, price not blown out, healthy volume ramp, positive trend/RS
     price_to_ema20_pct = (current_price - ema20_1h) / max(ema20_1h, 1e-9)
     is_not_extended = price_to_ema20_pct <= gates.max_ema20_1h_extension_pct
     is_sound_trend = trend_score >= 0.60
-    is_healthy_volume = 1.0 <= vol_ratio <= 4.0
-    is_positive_rs = rs_score >= 0.45
+    is_healthy_volume = 1.10 <= vol_ratio <= 4.0  # Backtested quality filter: min 1.10x ramp
+    is_positive_rs = rs_diff >= 1.50               # Backtested quality filter: min +1.50% RS diff
 
     if is_not_extended and is_sound_trend and is_healthy_volume and is_positive_rs:
         stage = "Stage 1 (Quiet Accumulation)"
@@ -363,22 +363,16 @@ def calculate_quiet_accumulation_score(
         is_stage1 = False
     else:
         stage = "Stage 1 (Consolidation / Building)"
-        is_stage1 = True if final_score >= 0.60 else False
+        is_stage1 = False  # DO NOT ALERT on Building/Consolidation (negative EV in backtest)
 
     # Trade Levels Suggestion
     # Entry zone: from current price down to 1h EMA20
     suggested_entry_high = current_price
     suggested_entry_low = min(current_price, ema20_1h if ema20_1h > 0 else current_price * 0.98)
 
-    # Conservative Stop Suggestion:
-    # 20-candle low or slightly below EMA50
-    recent_20_low = float(df_alt_1h["low"].iloc[-20:].min())
-    stop_ref = min(recent_20_low, ema50_1h if ema50_1h > 0 else recent_20_low)
-    suggested_stop = stop_ref * 0.99  # 1% buffer below structural level
-    if suggested_stop >= current_price:
-        suggested_stop = current_price * 0.95  # Fallback 5% stop
-
-    risk_to_stop_pct = ((current_price - suggested_stop) / current_price) * 100.0
+    # Calibrated -3.50% Hard Stop Loss
+    suggested_stop = current_price * (1.0 - 0.035)
+    risk_to_stop_pct = 3.50
 
     return ScoringResult(
         symbol=symbol,
