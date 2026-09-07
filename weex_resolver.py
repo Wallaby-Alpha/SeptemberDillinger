@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import logging
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from weex_client import WeexClient
 
@@ -36,10 +36,11 @@ class WeexSymbolResolver:
         self.client = client
         self.cache_ttl_seconds = cache_ttl_seconds
         self._markets_cache: Dict[str, Dict[str, Any]] = {}
+        self._api_symbols_cache: Set[str] = set()
         self._last_refresh: float = 0.0
 
     def refresh_markets(self, force: bool = False) -> None:
-        """Fetch all active WEEX contract markets with TTL caching."""
+        """Fetch all active WEEX contract markets and API whitelist with TTL caching."""
         now = time.time()
         if not force and self._markets_cache and (now - self._last_refresh < self.cache_ttl_seconds):
             return
@@ -48,10 +49,11 @@ class WeexSymbolResolver:
             markets = self.client.get_exchange_info()
             if markets:
                 self._markets_cache = markets
-                self._last_refresh = now
-                logger.info(f"[WEEX_RESOLVER] Cached {len(self._markets_cache)} active WEEX contract symbols.")
-            else:
-                logger.warning("[WEEX_RESOLVER] Received empty markets dictionary from WEEX.")
+            api_symbols = self.client.get_api_trading_symbols()
+            if api_symbols:
+                self._api_symbols_cache = api_symbols
+            self._last_refresh = now
+            logger.info(f"[WEEX_RESOLVER] Cached {len(self._markets_cache)} markets and {len(self._api_symbols_cache)} API-whitelisted symbols.")
         except Exception as e:
             logger.error(f"[WEEX_RESOLVER] Failed to refresh WEEX markets: {e}")
 
@@ -94,6 +96,11 @@ class WeexSymbolResolver:
 
         for cand_sym, mult in candidates:
             if cand_sym in self._markets_cache:
+                # Validate against official WEEX API trading whitelist
+                if self._api_symbols_cache and cand_sym not in self._api_symbols_cache:
+                    logger.info(f"[WEEX_RESOLVER] {cand_sym} is listed on WEEX but NOT supported for API trading. Skipping.")
+                    continue
+
                 meta = self._markets_cache[cand_sym]
                 return ResolvedWeexSymbol(
                     weex_symbol=cand_sym,

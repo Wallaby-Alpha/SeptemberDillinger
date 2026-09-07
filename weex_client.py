@@ -12,7 +12,7 @@ import hmac
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 import requests
 
 from config import WeexConfig
@@ -144,6 +144,23 @@ class WeexClient:
                     "maxLeverage": int(s.get("maxLeverage", 100)),
                 }
         return metadata
+
+    def get_api_trading_symbols(self) -> Set[str]:
+        """
+        Fetches the official whitelist of trading pairs approved for automated API orders:
+        GET /capi/v3/market/apiTradingSymbols
+        """
+        res = self.request("GET", "/capi/v3/market/apiTradingSymbols", is_public=True)
+        symbols = set()
+        if isinstance(res, list):
+            for s in res:
+                if isinstance(s, str):
+                    symbols.add(s.upper())
+        elif isinstance(res, dict) and "data" in res and isinstance(res["data"], list):
+            for s in res["data"]:
+                if isinstance(s, str):
+                    symbols.add(s.upper())
+        return symbols
 
     def get_mark_price(self, symbol: str) -> Optional[float]:
         """Fetches current mark price for a symbol."""
